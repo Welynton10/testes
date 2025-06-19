@@ -1,3 +1,5 @@
+// server/src/tests/services/task.service.test.ts - VERSÃO ANTERIOR
+
 import { InvalidTaskNameError } from '../../errors/task/InvalidTaskNameError';
 import { TaskNotFoundError } from '../../errors/task/TaskNotFoundError';
 import { TaskService } from '../../services/task.service';
@@ -18,13 +20,13 @@ jest.mock('../../utils/prisma', () => ({
 describe('TaskService', () => {
     const userId = 1;
     const tarefasMock = [
-        { id: 1, title: 'Tarefa 1', userId, completed: true, priority: 'high' },
-        { id: 2, title: 'Tarefa 2', userId, completed: false, priority: 'high' },
-        { id: 3, title: 'Tarefa 3', userId, completed: true, priority: 'medium' },
-        { id: 4, title: 'Tarefa 4', userId, completed: true, priority: 'high' },
+        { id: 1, title: 'Tarefa 1', userId, completed: true, priority: 'high', dueDate: null, description: null, createdAt: new Date(), updatedAt: new Date() },
+        { id: 2, title: 'Tarefa 2', userId, completed: false, priority: 'high', dueDate: null, description: null, createdAt: new Date(), updatedAt: new Date() },
+        { id: 3, title: 'Tarefa 3', userId, completed: true, priority: 'medium', dueDate: null, description: null, createdAt: new Date(), updatedAt: new Date() },
+        { id: 4, title: 'Tarefa 4', userId, completed: true, priority: 'high', dueDate: null, description: null, createdAt: new Date(), updatedAt: new Date() },
     ];
 
-    afterEach(() => {
+    beforeEach(() => {
         jest.clearAllMocks();
     });
 
@@ -35,7 +37,7 @@ describe('TaskService', () => {
                 title: 'Tarefa válida',
                 description: 'Essa é uma tarefa com o título válido',
             };
-
+    
             const tarefaCriadaMock = {
                 id: 1,
                 ...dadosValidos,
@@ -45,22 +47,23 @@ describe('TaskService', () => {
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
-
+    
             (prisma.task.create as jest.Mock).mockResolvedValue(tarefaCriadaMock);
-
+    
             // Act (agir)
             const tarefa = await TaskService.createTask(userId, dadosValidos);
-
+    
             // Assert (verificar)
             expect(prisma.task.create).toHaveBeenCalledWith({
                 data: {
                     ...dadosValidos,
-                    dueDate: null,
+                    // CORREÇÃO AQUI: Altere 'undefined' para 'null'
+                    dueDate: null, // <--- Esta linha foi modificada
                     priority: undefined,
                     userId,
                 },
             });
-
+    
             expect(tarefa).toEqual(tarefaCriadaMock);
         });
 
@@ -92,6 +95,8 @@ describe('TaskService', () => {
                 ...dadosEntrada,
                 dueDate: new Date(dadosEntrada.dueDate),
                 userId,
+                createdAt: new Date(),
+                updatedAt: new Date(),
             };
 
             (prisma.task.create as jest.Mock).mockResolvedValue(tarefaEsperada);
@@ -111,17 +116,22 @@ describe('TaskService', () => {
             expect(resultado).toEqual(tarefaEsperada);
         });
 
-        it('deve aceitar data de vencimento nula', async () => {
-            // Arrange (preparar)
-            const dadosEntrada = { title: 'Tarefa sem data de vencimento', dueDate: null };
-            const tarefaEsperada = { id: 2, ...dadosEntrada, userId };
+        // Teste 8: Deve aceitar data de vencimento nula explicitamente
+        it('deve aceitar data de vencimento nula explicitamente', async () => {
+            const dadosEntrada = { title: 'Tarefa sem data de vencimento', dueDate: null, description: 'desc', priority: 'low' };
+            const tarefaEsperada = { id: 2, ...dadosEntrada, dueDate: null, userId, createdAt: new Date(), updatedAt: new Date() };
 
             (prisma.task.create as jest.Mock).mockResolvedValue(tarefaEsperada);
 
-            // Act (agir)
             const resultado = await TaskService.createTask(userId, dadosEntrada);
 
-            // Assert (verificar)
+            expect(prisma.task.create).toHaveBeenCalledWith({
+                data: {
+                    ...dadosEntrada,
+                    dueDate: null,
+                    userId,
+                },
+            });
             expect(resultado.dueDate).toBeNull();
         });
     });
@@ -129,15 +139,15 @@ describe('TaskService', () => {
     describe('getTasks', () => {
         it('deve retornar tarefas filtradas por prioridade e status de conclusão', async () => {
             // Arrange (preparar)
-            const filtros = { completed: 'true', priority: 'high' };
-            const tarefasFiltradas = tarefasMock.filter(
-                (tarefa) => tarefa.completed && tarefa.priority === 'high',
+            const filters = { completed: 'true', priority: 'high' };
+            const filteredTasks = tarefasMock.filter(
+                (task) => task.completed && task.priority === 'high',
             );
 
-            (prisma.task.findMany as jest.Mock).mockResolvedValue(tarefasFiltradas);
+            (prisma.task.findMany as jest.Mock).mockResolvedValue(filteredTasks);
 
             // Act (agir)
-            const resultado = await TaskService.getTasks(userId, filtros);
+            const result = await TaskService.getTasks(userId, filters);
 
             // Assert (verificar)
             expect(prisma.task.findMany).toHaveBeenCalledWith({
@@ -145,7 +155,7 @@ describe('TaskService', () => {
                 orderBy: { createdAt: 'desc' },
             });
 
-            expect(resultado).toEqual(tarefasFiltradas);
+            expect(result).toEqual(filteredTasks);
         });
 
         it('deve retornar todas as tarefas se não houver filtros', async () => {
@@ -162,6 +172,22 @@ describe('TaskService', () => {
             });
 
             expect(resultado).toEqual(tarefasMock);
+        });
+
+        // Teste 9 ORIGINAL: Deve retornar tarefas filtradas apenas por status de conclusão
+        it('deve retornar tarefas filtradas apenas por status de conclusão', async () => {
+            const filters = { completed: 'false' };
+            const filteredTasks = tarefasMock.filter((task) => !task.completed);
+
+            (prisma.task.findMany as jest.Mock).mockResolvedValue(filteredTasks);
+
+            const result = await TaskService.getTasks(userId, filters);
+
+            expect(prisma.task.findMany).toHaveBeenCalledWith({
+                where: { userId, completed: false },
+                orderBy: { createdAt: 'desc' },
+            });
+            expect(result).toEqual(filteredTasks);
         });
     });
 
@@ -203,6 +229,10 @@ describe('TaskService', () => {
                 ...dadosAtualizacao,
                 dueDate: new Date(dadosAtualizacao.dueDate),
                 userId,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                description: null,
+                priority: null
             };
 
             (prisma.task.update as jest.Mock).mockResolvedValue(tarefaAtualizada);

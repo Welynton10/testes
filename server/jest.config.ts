@@ -5,4 +5,5 @@ export default {
     coverageDirectory: 'coverage',
     collectCoverageFrom: ['src/**/*.ts'],
     setupFiles: ['<rootDir>/jest.setup.ts'],
+    moduleDirectories: ['node_modules', '<rootDir>/src'],
 };
